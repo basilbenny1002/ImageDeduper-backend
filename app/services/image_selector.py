@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 import numpy as np
 import torch
@@ -41,6 +41,9 @@ class ImageSelectorService:
         # Lazy-load aesthetics predictor to avoid dependency unless needed
         self._predictor = None
         self._processor = None
+        # Progress tracking per user
+        # { user_id: { stage: int, percentage: int, eta_seconds: Optional[int], status: str, ... } }
+        self._progress: Dict[str, Dict[str, Any]] = {}
 
     def _ensure_aesthetics(self):
         if self._predictor is None or self._processor is None:
@@ -83,28 +86,60 @@ class ImageSelectorService:
                 similar.append(path)
         return similar
 
-    def choose_best(self, input_dir: Path, output_dir: Path, similarity: float = 0.87, use_aesthetics: bool = True) -> SelectionResult:
+    def choose_best(self, user_id: str, input_dir: Path, output_dir: Path, similarity: float = 0.87, use_aesthetics: bool = True) -> SelectionResult:
         input_dir = Path(input_dir)
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Index all images
-        for file in os.listdir(input_dir):
-            fp = input_dir / file
-            if fp.is_file():
-                try:
-                    self.add_image(fp)
-                except Exception:
-                    continue
+        # Prepare file list once
+        files = [input_dir / f for f in os.listdir(input_dir)]
+        files = [fp for fp in files if fp.is_file()]
+        total = len(files)
+
+        # Stage 1: embeddings indexing
+        import time as _time
+        stage1_start = _time.time()
+        processed1 = 0
+        self._progress[user_id] = {
+            "stage": 1,
+            "percentage": 0,
+            "eta_seconds": None,
+            "status": "indexing",
+            "total_stage1": total,
+            "processed_stage1": 0,
+            "total_stage2": total,
+            "processed_stage2": 0,
+        }
+
+        for fp in files:
+            try:
+                self.add_image(fp)
+            except Exception:
+                pass
+            processed1 += 1
+            elapsed = max(_time.time() - stage1_start, 1e-6)
+            rate = processed1 / elapsed
+            remaining = max(total - processed1, 0)
+            eta = int(remaining / rate) if rate > 0 else None
+            self._progress[user_id].update(
+                {
+                    "stage": 1,
+                    "percentage": int((processed1 / max(total, 1)) * 100),
+                    "eta_seconds": eta,
+                    "processed_stage1": processed1,
+                }
+            )
 
         kept: List[str] = []
         removed: List[str] = []
 
+        # Stage 2: selection
+        stage2_start = _time.time()
+        processed2 = 0
+        self._progress[user_id].update({"stage": 2, "percentage": 0, "eta_seconds": None, "status": "selecting"})
+
         i = 0
-        for file in os.listdir(input_dir):
-            fp = input_dir / file
-            if not fp.is_file():
-                continue
+        for fp in files:
             try:
                 similar = self.find_similar(fp, threshold=similarity)
             except Exception:
@@ -159,6 +194,29 @@ class ImageSelectorService:
                         removed.append(path)
                     except Exception:
                         pass
+            # Update progress for stage 2
+            processed2 += 1
+            elapsed2 = max(_time.time() - stage2_start, 1e-6)
+            rate2 = processed2 / elapsed2
+            remaining2 = max(total - processed2, 0)
+            eta2 = int(remaining2 / rate2) if rate2 > 0 else None
+            self._progress[user_id].update(
+                {
+                    "stage": 2,
+                    "percentage": int((processed2 / max(total, 1)) * 100),
+                    "eta_seconds": eta2,
+                    "processed_stage2": processed2,
+                }
+            )
 
-
+        # Completed
+        self._progress[user_id].update({"stage": 2, "percentage": 100, "eta_seconds": 0, "status": "completed"})
         return SelectionResult(kept=kept, removed=removed)
+
+    def get_progress(self, user_id: str) -> Dict[str, Any]:
+        return dict(
+            self._progress.get(
+                user_id,
+                {"stage": 0, "percentage": 0, "eta_seconds": None, "status": "idle"},
+            )
+        )

@@ -42,7 +42,7 @@ async def process_images(
     output_dir = input_dir / "output"
 
     def _run():
-        selector_service.choose_best(input_dir=input_dir, output_dir=output_dir, similarity=similarity, use_aesthetics=use_aesthetics)
+        selector_service.choose_best(user_id=user_id, input_dir=input_dir, output_dir=output_dir, similarity=similarity, use_aesthetics=use_aesthetics)
 
     background_tasks.add_task(_run)
     return {"status": "started"}
@@ -59,6 +59,11 @@ async def download_zip(user_id: str):
 
     make_archive(str(zip_path).replace(".zip", ""), "zip", user_dir)
     return FileResponse(zip_path, filename=f"{user_id}_output.zip")
+
+
+@router.get("/progress/{user_id}")
+async def get_progress(user_id: str):
+    return selector_service.get_progress(user_id)
 
 
 @router.get("/")
