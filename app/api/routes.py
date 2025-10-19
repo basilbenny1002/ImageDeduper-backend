@@ -49,15 +49,29 @@ async def process_images(
 
 
 @router.get("/download/{user_id}")
-async def download_zip(user_id: str):
+async def download_zip(user_id: str, background_tasks: BackgroundTasks):
     user_dir = settings.MEDIA_ROOT / user_id / "output"
     if not user_dir.exists():
         raise HTTPException(status_code=404, detail="No output for this user")
     zip_path = settings.MEDIA_ROOT / f"{user_id}_output.zip"
     # Create zip
-    from shutil import make_archive
+    from shutil import make_archive, rmtree
 
     make_archive(str(zip_path).replace(".zip", ""), "zip", user_dir)
+    
+    # After sending the file, delete the zip and the user's media folder
+    def _cleanup():
+        try:
+            if zip_path.exists():
+                zip_path.unlink()
+        except Exception:
+            pass
+        try:
+            rmtree(settings.MEDIA_ROOT / user_id, ignore_errors=True)
+        except Exception:
+            pass
+
+    background_tasks.add_task(_cleanup)
     return FileResponse(zip_path, filename=f"{user_id}_output.zip")
 
 
