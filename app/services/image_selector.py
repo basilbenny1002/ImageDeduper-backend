@@ -109,6 +109,12 @@ class ImageSelectorService:
                 similar = self.find_similar(fp, threshold=similarity)
             except Exception:
                 similar = []
+            # Remove found images from DB immediately to avoid regrouping in later iterations
+            try:
+                if similar:
+                    self.repo.delete_many(similar)
+            except Exception:
+                pass
             i += 1
 
             best_score = -1e9
@@ -154,7 +160,5 @@ class ImageSelectorService:
                     except Exception:
                         pass
 
-            # remove from DB so future groups don't recount
-            self.repo.delete_many(similar)
 
         return SelectionResult(kept=kept, removed=removed)
