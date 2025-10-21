@@ -63,34 +63,57 @@ Health check:
 
 Output images are also available at `media/temp/<user_id>/output/`.
 
-## Frontend note (index.html)
-The current `index.html` uses a WebSocket endpoint `ws://localhost:8000/ws/upload/`, which is not implemented in this refactor. Switch to HTTP uploads and processing:
+## Frontend
+A ready-to-use frontend for this backend is available here:
 
-- Replace WebSocket uploads with `fetch` POST to `/upload` per file using `FormData`.
-- Trigger processing via POST `/process`.
-- After a short delay, GET `/download/{user_id}` to retrieve the ZIP.
+- https://github.com/basilbenny1002/image-selector-front-end
 
-If you want live progress events, we can add:
-- A simple in-memory progress endpoint, or
-- Server-Sent Events (SSE) stream for real-time updates, or
-- A WebSocket channel. Let me know which you prefer.
+It handles file uploads, triggers processing, shows progress, and downloads the results.
 
-## CLI usage
-
-You can also run selection directly on folders:
+## Quick start (local)
 
 ```powershell
+# 1) Clone the repo
+git clone https://github.com/basilbenny1002/ImageDeduper-backend.git
+cd ImageDeduper-backend
+
+# 2) Create venv and install dependencies
+python -m venv .venv
 . .venv\Scripts\Activate.ps1
-python scripts/selector.py --input .\path\to\images --output .\out --similarity 0.87
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# 3) Run the server (API)
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Use `--no-aesthetics` to skip the aesthetics score.
+Then:
+- Upload images: POST /upload with form fields user_id and file
+- Start processing: POST /process with form fields user_id, similarity, use_aesthetics
+- Download ZIP: GET /download/{user_id}
 
-Optionally scope to a specific user id for the local run (defaults to `cli`):
+## Local (CLI) quick start
+
+Run the tool directly on folders from your machine:
 
 ```powershell
-python scripts/selector.py --input .\path\to\images --output .\out --user-id my_user_123
+# 1) Clone and enter the project
+git clone https://github.com/basilbenny1002/ImageDeduper-backend.git
+cd ImageDeduper-backend
+
+# 2) Install dependencies
+pip install -r requirements.txt
+
+# 3) Run the CLI (default similarity = 0.87)
+python scripts/selector.py --input .\path\to\images --output .\out
+
+# Example: custom similarity
+python scripts/selector.py --input .\path\to\images --output .\out --similarity 0.92
 ```
+
+Notes:
+- The CLI will prompt you to confirm because the input directory may be moved/deleted during processing. Make a backup first.
+- The similarity threshold defaults to 0.87 if you don't set it.
 
 ## Troubleshooting
 - First run will download model weights; this can take time.
@@ -99,3 +122,7 @@ python scripts/selector.py --input .\path\to\images --output .\out --user-id my_
 
 ## License
 SPDX-License-Identifier: MIT — see header in `scripts/selector.py`.
+
+## Project origin
+This project is based on by:
+- https://github.com/basilbenny1002/Image-Selecter
