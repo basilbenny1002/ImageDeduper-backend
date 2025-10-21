@@ -12,7 +12,7 @@ A FastAPI backend that uploads images, groups similar ones using ResNet50 embedd
   - `repositories/embeddings.py` — SQLite wrapper for image embeddings
 - `scripts/selector.py` — CLI utility that delegates to the service
 - `media/temp/` — Per-user upload folders; processed results in `media/temp/<user_id>/output`
-- `embeddings.db` — SQLite DB for cached embeddings
+- `media/temp/<user_id>/embeddings.db` — Per-user SQLite DB for cached embeddings (auto-removed after download)
 
 ## Requirements
 
@@ -85,6 +85,12 @@ python scripts/selector.py --input .\path\to\images --output .\out --similarity 
 ```
 
 Use `--no-aesthetics` to skip the aesthetics score.
+
+Optionally scope to a specific user id for the local run (defaults to `cli`):
+
+```powershell
+python scripts/selector.py --input .\path\to\images --output .\out --user-id my_user_123
+```
 
 ## Troubleshooting
 - First run will download model weights; this can take time.

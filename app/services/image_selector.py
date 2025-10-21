@@ -36,7 +36,8 @@ class ImageSelectorService:
             ]
         )
 
-        self.repo = db_repo or EmbeddingsRepository(settings.DB_PATH)
+    # Note: repository is now user-scoped and created within choose_best.
+    # db_repo parameter is ignored to avoid accidental cross-user sharing.
 
         # Lazy-load aesthetics predictor to avoid dependency unless needed
         self._predictor = None
@@ -62,9 +63,9 @@ class ImageSelectorService:
         norm = np.linalg.norm(emb)
         return emb / max(norm, 1e-8)
 
-    def add_image(self, image_path: Path) -> None:
+    def add_image(self, image_path: Path, repo: EmbeddingsRepository) -> None:
         emb = self.embed_image(image_path)
-        self.repo.upsert(str(image_path), emb.tobytes())
+        repo.upsert(str(image_path), emb.tobytes())
 
     def predict_aesthetic(self, image_path: Path) -> float:
         self._ensure_aesthetics()
@@ -75,9 +76,9 @@ class ImageSelectorService:
             outputs = self._predictor(**inputs)
         return float(outputs.logits[0].item())
 
-    def find_similar(self, query_image: Path, threshold: float) -> List[str]:
+    def find_similar(self, query_image: Path, threshold: float, repo: EmbeddingsRepository) -> List[str]:
         q = self.embed_image(query_image)
-        entries = self.repo.list_all()
+        entries = repo.list_all()
         similar = []
         for path, emb_blob in entries:
             emb = np.frombuffer(emb_blob, dtype=np.float32)
@@ -96,6 +97,9 @@ class ImageSelectorService:
         files = [fp for fp in files if fp.is_file()]
         total = len(files)
 
+        # Create user-scoped embeddings repository
+        repo = EmbeddingsRepository(settings.user_db_path(user_id))
+
         # Stage 1: embeddings indexing
         import time as _time
         stage1_start = _time.time()
@@ -113,7 +117,7 @@ class ImageSelectorService:
 
         for fp in files:
             try:
-                self.add_image(fp)
+                self.add_image(fp, repo)
             except Exception:
                 pass
             processed1 += 1
@@ -141,13 +145,13 @@ class ImageSelectorService:
         i = 0
         for fp in files:
             try:
-                similar = self.find_similar(fp, threshold=similarity)
+                similar = self.find_similar(fp, threshold=similarity, repo=repo)
             except Exception:
                 similar = []
             # Remove found images from DB immediately to avoid regrouping in later iterations
             try:
                 if similar:
-                    self.repo.delete_many(similar)
+                    repo.delete_many(similar)
             except Exception:
                 pass
             i += 1
@@ -211,6 +215,11 @@ class ImageSelectorService:
 
         # Completed
         self._progress[user_id].update({"stage": 2, "percentage": 100, "eta_seconds": 0, "status": "completed"})
+        # Ensure DB is closed before returning so the file can be deleted on Windows
+        try:
+            repo.close()
+        except Exception:
+            pass
         return SelectionResult(kept=kept, removed=removed)
 
     def get_progress(self, user_id: str) -> Dict[str, Any]:
