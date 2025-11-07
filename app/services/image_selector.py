@@ -154,10 +154,11 @@ class ImageSelectorService:
 
         # Stage 2: selection with optimized algorithm
         stage2_start = _time.time()
-        processed2 = 0
         self._progress[user_id].update({"stage": 2, "percentage": 0, "eta_seconds": None, "status": "selecting"})
 
         group_num = 0
+        files_processed_count = 0  # Track count for efficient progress updates
+        
         for fp in files:
             fp_str = str(fp)
             
@@ -174,6 +175,7 @@ class ImageSelectorService:
             if not similar:
                 # Mark as processed
                 processed_files.add(fp_str)
+                files_processed_count += 1
                 # Copy to output as it's unique
                 try:
                     dest_path = output_dir / fp.name
@@ -186,12 +188,14 @@ class ImageSelectorService:
             
             # Mark all similar images as processed (including the current file)
             processed_files.update(similar)
+            files_processed_count += len(similar)
             
             # Remove found images from DB to avoid regrouping in later iterations
             # Batching commits every few groups to reduce transaction overhead
+            # Final commit at end ensures any remaining deletes are persisted
             try:
                 repo.delete_many(similar)
-                # Commit every 5 groups or if this is the last batch
+                # Commit every 5 groups
                 if (group_num + 1) % 5 == 0:
                     repo.commit()
             except Exception:
@@ -243,20 +247,20 @@ class ImageSelectorService:
                     except Exception:
                         pass
             
-            # Update progress for stage 2 - calculate based on unique files processed
+            # Update progress for stage 2 - use counter for efficiency
             # Cap at total to avoid exceeding 100%
-            files_processed = min(len(processed_files), total)
-            if files_processed % 5 == 0 or files_processed >= total:
+            current_progress = min(files_processed_count, total)
+            if current_progress % 5 == 0 or current_progress >= total:
                 elapsed2 = max(_time.time() - stage2_start, 1e-6)
-                rate2 = files_processed / elapsed2
-                remaining2 = max(total - files_processed, 0)
+                rate2 = current_progress / elapsed2
+                remaining2 = max(total - current_progress, 0)
                 eta2 = int(remaining2 / rate2) if rate2 > 0 else None
                 self._progress[user_id].update(
                     {
                         "stage": 2,
-                        "percentage": int((files_processed / max(total, 1)) * 100),
+                        "percentage": int((current_progress / max(total, 1)) * 100),
                         "eta_seconds": eta2,
-                        "processed_stage2": files_processed,
+                        "processed_stage2": current_progress,
                     }
                 )
 
