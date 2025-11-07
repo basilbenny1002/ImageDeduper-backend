@@ -170,17 +170,20 @@ class ImageSelectorService:
             except Exception:
                 similar = []
             
-            # Mark all similar images as processed
+            # If no similar images found, skip this file
+            if not similar:
+                continue
+            
+            # Mark all similar images as processed (including the current file)
             processed_files.update(similar)
             
             # Remove found images from DB immediately to avoid regrouping in later iterations
             # Note: Commit is necessary here to ensure deleted items don't appear in subsequent find_similar calls
-            if similar:
-                try:
-                    repo.delete_many(similar)
-                    repo.commit()
-                except Exception:
-                    pass
+            try:
+                repo.delete_many(similar)
+                repo.commit()
+            except Exception:
+                pass
             
             group_num += 1
 
@@ -228,19 +231,18 @@ class ImageSelectorService:
                     except Exception:
                         pass
             
-            # Update progress for stage 2 - calculate based on unique groups processed
-            processed2 = len(processed_files)
-            if processed2 % 5 == 0 or processed2 >= total:
+            # Update progress for stage 2 - calculate based on unique files processed
+            if len(processed_files) % 5 == 0 or len(processed_files) >= total:
                 elapsed2 = max(_time.time() - stage2_start, 1e-6)
-                rate2 = processed2 / elapsed2
-                remaining2 = max(total - processed2, 0)
+                rate2 = len(processed_files) / elapsed2
+                remaining2 = max(total - len(processed_files), 0)
                 eta2 = int(remaining2 / rate2) if rate2 > 0 else None
                 self._progress[user_id].update(
                     {
                         "stage": 2,
-                        "percentage": int((processed2 / max(total, 1)) * 100),
+                        "percentage": int((len(processed_files) / max(total, 1)) * 100),
                         "eta_seconds": eta2,
-                        "processed_stage2": processed2,
+                        "processed_stage2": len(processed_files),
                     }
                 )
 

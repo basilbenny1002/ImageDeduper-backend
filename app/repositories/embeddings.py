@@ -18,10 +18,7 @@ class EmbeddingsRepository:
             )
             """
         )
-        # Add index for faster lookups
-        self._cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_path ON images(path)"
-        )
+        # PRIMARY KEY already has an index, so no additional index needed
         self._conn.commit()
 
     def upsert(self, path: str, embedding: bytes) -> None:
@@ -60,7 +57,7 @@ class EmbeddingsRepository:
             return [], None
         paths = [row[0] for row in rows]
         # More efficient: pre-allocate array instead of using vstack with list comprehension
-        # Assuming all embeddings have the same size (ResNet50 produces 2048-d vectors)
+        # Detect embedding dimension from first entry
         first_emb = np.frombuffer(rows[0][1], dtype=np.float32)
         emb_dim = len(first_emb)
         embeddings = np.empty((len(rows), emb_dim), dtype=np.float32)
