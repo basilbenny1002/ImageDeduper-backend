@@ -18,9 +18,10 @@ async def upload_file(file: UploadFile = File(...), user_id: str = Form(...)):
     user_dir.mkdir(parents=True, exist_ok=True)
     dest = user_dir / file.filename
     try:
+        # Increased chunk size from 1MB to 8MB for better performance
         with dest.open("wb") as f:
             while True:
-                chunk = await file.read(1024 * 1024)
+                chunk = await file.read(8 * 1024 * 1024)
                 if not chunk:
                     break
                 f.write(chunk)
@@ -53,11 +54,15 @@ async def download_zip(user_id: str, background_tasks: BackgroundTasks):
     user_dir = settings.MEDIA_ROOT / user_id / "output"
     if not user_dir.exists():
         raise HTTPException(status_code=404, detail="No output for this user")
+    
+    # Pre-compute paths to avoid repeated operations
+    zip_base = settings.MEDIA_ROOT / f"{user_id}_output"
     zip_path = settings.MEDIA_ROOT / f"{user_id}_output.zip"
+    
     # Create zip
     from shutil import make_archive, rmtree
 
-    make_archive(str(zip_path).replace(".zip", ""), "zip", user_dir)
+    make_archive(str(zip_base), "zip", user_dir)
     
     # After sending the file, delete the zip and the user's media folder
     def _cleanup():
