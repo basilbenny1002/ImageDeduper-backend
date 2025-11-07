@@ -174,6 +174,7 @@ class ImageSelectorService:
             processed_files.update(similar)
             
             # Remove found images from DB immediately to avoid regrouping in later iterations
+            # Note: Commit is necessary here to ensure deleted items don't appear in subsequent find_similar calls
             if similar:
                 try:
                     repo.delete_many(similar)

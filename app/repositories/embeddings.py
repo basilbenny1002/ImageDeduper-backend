@@ -59,7 +59,14 @@ class EmbeddingsRepository:
         if not rows:
             return [], None
         paths = [row[0] for row in rows]
-        embeddings = np.vstack([np.frombuffer(row[1], dtype=np.float32) for row in rows])
+        # More efficient: pre-allocate array instead of using vstack with list comprehension
+        # Assuming all embeddings have the same size (ResNet50 produces 2048-d vectors)
+        first_emb = np.frombuffer(rows[0][1], dtype=np.float32)
+        emb_dim = len(first_emb)
+        embeddings = np.empty((len(rows), emb_dim), dtype=np.float32)
+        embeddings[0] = first_emb
+        for i in range(1, len(rows)):
+            embeddings[i] = np.frombuffer(rows[i][1], dtype=np.float32)
         return paths, embeddings
 
     def close(self) -> None:
