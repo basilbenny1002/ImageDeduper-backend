@@ -63,7 +63,10 @@ class EmbeddingsRepository:
         embeddings = np.empty((len(rows), emb_dim), dtype=np.float32)
         embeddings[0] = first_emb
         for i in range(1, len(rows)):
-            embeddings[i] = np.frombuffer(rows[i][1], dtype=np.float32)
+            emb = np.frombuffer(rows[i][1], dtype=np.float32)
+            if len(emb) != emb_dim:
+                raise ValueError(f"Embedding dimension mismatch at index {i}: expected {emb_dim}, got {len(emb)}")
+            embeddings[i] = emb
         return paths, embeddings
 
     def close(self) -> None:

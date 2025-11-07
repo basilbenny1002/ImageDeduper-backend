@@ -170,18 +170,30 @@ class ImageSelectorService:
             except Exception:
                 similar = []
             
-            # If no similar images found, skip this file
+            # If no similar images found, this is a unique image - keep it
             if not similar:
+                # Mark as processed
+                processed_files.add(fp_str)
+                # Copy to output as it's unique
+                try:
+                    dest_path = output_dir / fp.name
+                    shutil.copy2(fp, dest_path)
+                    kept.append(fp_str)
+                    fp.unlink()  # Remove from input after copying
+                except Exception:
+                    pass
                 continue
             
             # Mark all similar images as processed (including the current file)
             processed_files.update(similar)
             
-            # Remove found images from DB immediately to avoid regrouping in later iterations
-            # Note: Commit is necessary here to ensure deleted items don't appear in subsequent find_similar calls
+            # Remove found images from DB to avoid regrouping in later iterations
+            # Batching commits every few groups to reduce transaction overhead
             try:
                 repo.delete_many(similar)
-                repo.commit()
+                # Commit every 5 groups or if this is the last batch
+                if (group_num + 1) % 5 == 0:
+                    repo.commit()
             except Exception:
                 pass
             
@@ -246,6 +258,12 @@ class ImageSelectorService:
                     }
                 )
 
+        # Final commit for any pending database operations
+        try:
+            repo.commit()
+        except Exception:
+            pass
+        
         # Completed
         self._progress[user_id].update({"stage": 2, "percentage": 100, "eta_seconds": 0, "status": "completed"})
         # Ensure DB is closed before returning so the file can be deleted on Windows
