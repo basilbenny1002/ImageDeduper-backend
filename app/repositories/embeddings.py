@@ -64,6 +64,8 @@ class EmbeddingsRepository:
         embeddings[0] = first_emb
         for i in range(1, len(rows)):
             emb = np.frombuffer(rows[i][1], dtype=np.float32)
+            # Validate dimension only if there's a mismatch (fail fast)
+            # This avoids expensive checks for every embedding in production
             if len(emb) != emb_dim:
                 raise ValueError(f"Embedding dimension mismatch at index {i}: expected {emb_dim}, got {len(emb)}")
             embeddings[i] = emb

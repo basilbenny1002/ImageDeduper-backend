@@ -55,7 +55,6 @@ async def download_zip(user_id: str, background_tasks: BackgroundTasks):
     if not user_dir.exists():
         raise HTTPException(status_code=404, detail="No output for this user")
     
-    # Pre-compute paths to avoid repeated operations
     zip_base = settings.MEDIA_ROOT / f"{user_id}_output"
     zip_path = settings.MEDIA_ROOT / f"{user_id}_output.zip"
     

@@ -244,17 +244,19 @@ class ImageSelectorService:
                         pass
             
             # Update progress for stage 2 - calculate based on unique files processed
-            if len(processed_files) % 5 == 0 or len(processed_files) >= total:
+            # Cap at total to avoid exceeding 100%
+            files_processed = min(len(processed_files), total)
+            if files_processed % 5 == 0 or files_processed >= total:
                 elapsed2 = max(_time.time() - stage2_start, 1e-6)
-                rate2 = len(processed_files) / elapsed2
-                remaining2 = max(total - len(processed_files), 0)
+                rate2 = files_processed / elapsed2
+                remaining2 = max(total - files_processed, 0)
                 eta2 = int(remaining2 / rate2) if rate2 > 0 else None
                 self._progress[user_id].update(
                     {
                         "stage": 2,
-                        "percentage": int((len(processed_files) / max(total, 1)) * 100),
+                        "percentage": int((files_processed / max(total, 1)) * 100),
                         "eta_seconds": eta2,
-                        "processed_stage2": len(processed_files),
+                        "processed_stage2": files_processed,
                     }
                 )
 
